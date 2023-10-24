@@ -110,6 +110,7 @@ double relax_gauss (double *u, unsigned sizex, unsigned sizey)
 				      u[ (i-1)*sizey	+ j     ]+  // top
 				      u[ (i+1)*sizey	+ j     ]); // bottom
 	            diff = unew - u[i*sizey+ j];
+		    #pragma omp atomic
 	            sum += diff * diff; 
 	            u[i*sizey+j]=unew;
                 }
