@@ -91,20 +91,21 @@ double relax_redblack (double *u, unsigned sizex, unsigned sizey)
 double relax_gauss (double *u, unsigned sizex, unsigned sizey)
 {
     double unew, diff, sum=0.0;
-    int nbx, bx, nby, by;
+    int nbx, bx, nby, by, i, j;
 
-    nbx = NB;
-    bx = sizex/nbx;
-    nby = NB;
-    by = sizey/nby;
-    #pragma omp parallel private(unew, diff)
+    nbx = NB; //8
+    bx = sizex/nbx; //32
+    nby = NB; //8
+    by = sizey/nby; //32
+    #pragma omp parallel private(unew, diff,i,j)
     #pragma omp single
-    {
     for (int ii=0; ii<nbx; ii++)
         for (int jj=0; jj<nby; jj++) 
             #pragma omp task depend(in: u[ii*bx + (jj+1)*by], u[(ii+1)*bx + (jj)*by])  depend(out: u[(ii + 1)*bx + (jj+1)*by])
-            for (int i=1+ii*bx; i<=min((ii+1)*bx, sizex-2); i++) 
-                for (int j=1+jj*by; j<=min((jj+1)*by, sizey-2); j++) {
+	    {
+
+            for (i=1+ii*bx; i<=min((ii+1)*bx, sizex-2); i++) 
+                for (j=1+jj*by; j<=min((jj+1)*by, sizey-2); j++) {
 	            unew= 0.25 * (    u[ i*sizey	+ (j-1) ]+  // left
 				      u[ i*sizey	+ (j+1) ]+  // right
 				      u[ (i-1)*sizey	+ j     ]+  // top
@@ -113,8 +114,9 @@ double relax_gauss (double *u, unsigned sizex, unsigned sizey)
 		    #pragma omp atomic
 	            sum += diff * diff; 
 	            u[i*sizey+j]=unew;
+		    printf("setting u[%d]: \tin=u[%d],u[%d]\tout=u[%d]\n", i*sizey+j, ii*bx + (jj+1)*by, (ii+1)*bx + (jj)*by, 1 + ii*bx + 1 + jj*by);
                 }
-    }
+	    }
     return sum;
 }
 
