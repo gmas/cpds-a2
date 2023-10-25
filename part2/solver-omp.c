@@ -103,7 +103,7 @@ double relax_gauss (double *u, unsigned sizex, unsigned sizey)
         for (int jj=0; jj<nby; jj++) 
             #pragma omp task depend(in: u[ii*bx + (jj+1)*by], u[(ii+1)*bx + (jj)*by])  depend(out: u[(ii + 1)*bx + (jj+1)*by])
 	    {
-
+	    printf("\tin=u[%d],u[%d]\tout=u[%d]\n", ii*bx + (jj+1)*by, (ii+1)*bx + (jj)*by, (ii + 1)*bx + (jj+1)*by);
             for (i=1+ii*bx; i<=min((ii+1)*bx, sizex-2); i++) 
                 for (j=1+jj*by; j<=min((jj+1)*by, sizey-2); j++) {
 	            unew= 0.25 * (    u[ i*sizey	+ (j-1) ]+  // left
@@ -114,7 +114,6 @@ double relax_gauss (double *u, unsigned sizex, unsigned sizey)
 		    #pragma omp atomic
 	            sum += diff * diff; 
 	            u[i*sizey+j]=unew;
-		    printf("setting u[%d]: \tin=u[%d],u[%d]\tout=u[%d]\n", i*sizey+j, ii*bx + (jj+1)*by, (ii+1)*bx + (jj)*by, 1 + ii*bx + 1 + jj*by);
                 }
 	    }
     return sum;
