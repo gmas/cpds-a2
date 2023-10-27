@@ -2,6 +2,7 @@
  * Iterative solver for heat distribution
  */
 
+#include <assert.h>
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -92,23 +93,37 @@ int main( int argc, char *argv[] )
     
     // starting time
     runtime = wtime();
+    MPI_Status status;
+
 
     // send to workers the necessary data to perform computation
     for (int i=0; i<numprocs; i++) {
         if (i>0) {
-                MPI_Send(&param.maxiter, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
-                MPI_Send(&param.resolution, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
-                MPI_Send(&param.algorithm, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
-                MPI_Send(&param.u[0], (np)*(np), MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
-                MPI_Send(&param.uhelp[0], (np)*(np), MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&param.maxiter, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&param.resolution, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&param.algorithm, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&param.u[0], (np)*(np), MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&param.uhelp[0], (np)*(np), MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+        } else {
+            MPI_Recv(&param.maxiter, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
+            MPI_Recv(&param.resolution, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
+            MPI_Recv(&param.algorithm, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
+            MPI_Recv(&param.u[0], (np)*(np), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+            MPI_Recv(&param.uhelp[0], (np)*(np), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
         }
     }
+
+    int send_to = myid +1;
+    if(send_to>= numprocs) send_to = MPI_PROC_NULL;
+    int recv_from = myid - 1;
+    if(recv_from < 0) recv_from = MPI_PROC_NULL;
+    assert(np % numprocs == 0); // matrix must be divisible by number of processes
 
     iter = 0;
     while(1) {
 	switch( param.algorithm ) {
 	    case 0: // JACOBI
-	            residual = relax_jacobi(param.u, param.uhelp, np, np);
+            residual = relax_jacobi(param.u, param.uhelp, np, np / numprocs, send_to, recv_from);
 		    // Copy uhelp into u
 		    for (int i=0; i<np; i++)
     		        for (int j=0; j<np; j++)
@@ -123,6 +138,7 @@ int main( int argc, char *argv[] )
 	    }
 
         iter++;
+        MPI_Allreduce(&residual, &residual, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
         // solution good enough ?
         if (residual < 0.00005) break;

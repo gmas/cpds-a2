@@ -1,11 +1,12 @@
 #include "heat.h"
+#include "mpi.h"
 
 #define min(a,b) ( ((a) < (b)) ? (a) : (b) )
 #define NB 8
 /*
  * Blocked Jacobi solver: one iteration step
  */
-double relax_jacobi (double *u, double *utmp, unsigned sizex, unsigned sizey)
+double relax_jacobi (double *u, double *utmp, unsigned sizex, unsigned sizey, int recv_from, int send_to)
 {
     double diff, sum=0.0;
     int nbx, bx, nby, by;
@@ -14,6 +15,13 @@ double relax_jacobi (double *u, double *utmp, unsigned sizex, unsigned sizey)
     bx = sizex/nbx;
     nby = NB;
     by = sizey/nby;
+    MPI_Status status;
+
+    double* u_send = u + (sizey -1) * sizex;
+
+    MPI_Send(u_send, sizey, MPI_DOUBLE, send_to, 0, MPI_COMM_WORLD);
+    MPI_Recv(u, sizex, MPI_DOUBLE, recv_from, 0, MPI_COMM_WORLD, &status);
+
     for (int ii=0; ii<nbx; ii++)
         for (int jj=0; jj<nby; jj++) 
             for (int i=1+ii*bx; i<=min((ii+1)*bx, sizex-2); i++) 
@@ -101,7 +109,7 @@ double relax_gauss (double *u, unsigned sizex, unsigned sizey)
 	            sum += diff * diff; 
 	            u[i*sizey+j]=unew;
                 }
-
+    
     return sum;
 }
 

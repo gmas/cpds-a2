@@ -54,5 +54,5 @@ double relax_gauss( double *u,
 		  unsigned sizex, unsigned sizey );
 
 double relax_jacobi( double *u, double *utmp,
-		   unsigned sizex, unsigned sizey ); 
+		   unsigned sizex, unsigned sizey, int, int ); 
 
