@@ -1,6 +1,6 @@
 CC =  gcc 
 MPICC = mpicc
-CFLAGS = -O3 -Wall -std=c99
+CFLAGS = -O3 -Wall -std=c99 -g
 
 ALL	= heat-mpi 
 all: $(ALL)

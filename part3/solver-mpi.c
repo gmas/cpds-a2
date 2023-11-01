@@ -6,7 +6,7 @@
 /*
  * Blocked Jacobi solver: one iteration step
  */
-double relax_jacobi (double *u, double *utmp, unsigned sizex, unsigned sizey, int recv_from, int send_to)
+double relax_jacobi (double *u, double *utmp, unsigned sizex, unsigned sizey, int prev_rank, int next_rank)
 {
     double diff, sum=0.0;
     int nbx, bx, nby, by;
@@ -17,13 +17,8 @@ double relax_jacobi (double *u, double *utmp, unsigned sizex, unsigned sizey, in
     by = sizey/nby;
     MPI_Status status;
 
-    double* u_send = u + (sizey -1) * sizex;
-
-    MPI_Send(u_send, sizey, MPI_DOUBLE, send_to, 0, MPI_COMM_WORLD);
-    MPI_Recv(u, sizex, MPI_DOUBLE, recv_from, 0, MPI_COMM_WORLD, &status);
-
     for (int ii=0; ii<nbx; ii++)
-        for (int jj=0; jj<nby; jj++) 
+        for (int jj=0; jj<nby; jj++) {
             for (int i=1+ii*bx; i<=min((ii+1)*bx, sizex-2); i++) 
                 for (int j=1+jj*by; j<=min((jj+1)*by, sizey-2); j++) {
 	            utmp[i*sizey+j]= 0.25 * (u[ i*sizey     + (j-1) ]+  // left
@@ -33,7 +28,18 @@ double relax_jacobi (double *u, double *utmp, unsigned sizex, unsigned sizey, in
 	            diff = utmp[i*sizey+j] - u[i*sizey + j];
 	            sum += diff * diff; 
 	        }
+        }
+    size_t last_non_halo =  (sizex -2) * sizey;
+    MPI_Send(&utmp[last_non_halo], sizey, MPI_DOUBLE, next_rank, 0, MPI_COMM_WORLD);
+    MPI_Recv(utmp, sizey, MPI_DOUBLE, prev_rank, 0, MPI_COMM_WORLD, &status);
 
+    size_t first_non_halo =  sizey;
+    size_t last_halo =  (sizex -1) * sizey;
+    MPI_Send(&utmp[first_non_halo], sizey, MPI_DOUBLE, prev_rank, 0, MPI_COMM_WORLD);
+    MPI_Recv(&utmp[last_halo], sizey, MPI_DOUBLE, next_rank, 0, MPI_COMM_WORLD, &status);
+
+
+    // printf("%ld, 0, %ld, %ld\n", last_non_halo, first_non_halo, last_halo);
     return sum;
 }
 

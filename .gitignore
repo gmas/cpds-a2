@@ -1,0 +1,4 @@
+*.o
+heat-mpi
+heat
+heat.ppm

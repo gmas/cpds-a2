@@ -26,6 +26,13 @@ int main( int argc, char *argv[] )
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &myid);
 
+
+
+    int next_worker = myid + 1;
+    if(next_worker>= numprocs) next_worker = MPI_PROC_NULL;
+    int prev_worker = myid - 1;
+    if(prev_worker < 0) prev_worker = MPI_PROC_NULL;
+
     if (myid == 0) {
       printf("I am the master (%d) and going to distribute work to %d additional workers ...\n", myid, numprocs-1);
 
@@ -95,6 +102,7 @@ int main( int argc, char *argv[] )
     runtime = wtime();
     MPI_Status status;
 
+    int sizex = param.resolution / numprocs + 2;
 
     // send to workers the necessary data to perform computation
     for (int i=0; i<numprocs; i++) {
@@ -102,32 +110,22 @@ int main( int argc, char *argv[] )
             MPI_Send(&param.maxiter, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
             MPI_Send(&param.resolution, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
             MPI_Send(&param.algorithm, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
-            MPI_Send(&param.u[0], (np)*(np), MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
-            MPI_Send(&param.uhelp[0], (np)*(np), MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
-        } else {
-            MPI_Recv(&param.maxiter, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
-            MPI_Recv(&param.resolution, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
-            MPI_Recv(&param.algorithm, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
-            MPI_Recv(&param.u[0], (np)*(np), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
-            MPI_Recv(&param.uhelp[0], (np)*(np), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+            int start_index = np * (sizex - 2) *i;
+            MPI_Send(&param.u[start_index], (np)*(sizex), MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&param.uhelp[start_index], (np)*(sizex), MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
         }
     }
 
-    int send_to = myid +1;
-    if(send_to>= numprocs) send_to = MPI_PROC_NULL;
-    int recv_from = myid - 1;
-    if(recv_from < 0) recv_from = MPI_PROC_NULL;
-    assert(np % numprocs == 0); // matrix must be divisible by number of processes
+    assert(param.resolution % numprocs == 0); // matrix must be divisible by number of processes
 
     iter = 0;
     while(1) {
 	switch( param.algorithm ) {
 	    case 0: // JACOBI
-            residual = relax_jacobi(param.u, param.uhelp, np, np / numprocs, send_to, recv_from);
+            residual = relax_jacobi(param.u, param.uhelp, sizex, np, prev_worker, next_worker);
 		    // Copy uhelp into u
-		    for (int i=0; i<np; i++)
-    		        for (int j=0; j<np; j++)
-	    		    param.u[ i*np+j ] = param.uhelp[ i*np+j ];
+		    for (int i=0; i<np * sizex; i++)
+	    		    param.u[ i ] = param.uhelp[ i ];
 		    break;
 	    case 1: // RED-BLACK
 		    residual = relax_redblack(param.u, np, np);
@@ -146,6 +144,10 @@ int main( int argc, char *argv[] )
         // max. iteration reached ? (no limit with maxiter=0)
         if (param.maxiter>0 && iter>=param.maxiter) break;
     }
+        printf("Gathering master\n");
+
+        MPI_Gather(param.u + np, (sizex-2) * np, MPI_DOUBLE, param.u + np, (sizex-2) * np, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        printf("gathered master\n");
 
     // Flop count after iter iterations
     flop = iter * 11.0 * param.resolution * param.resolution;
@@ -189,8 +191,9 @@ int main( int argc, char *argv[] )
     MPI_Recv(&columns, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
     MPI_Recv(&algorithm, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
 
-    rows = columns;
+    rows = columns / numprocs;
     np = columns + 2;
+
 
     // allocate memory for worker
     double * u = calloc( sizeof(double),(rows+2)*(columns+2) );
@@ -209,9 +212,9 @@ int main( int argc, char *argv[] )
     while(1) {
 	switch( algorithm ) {
 	    case 0: // JACOBI
-	            residual = relax_jacobi(u, uhelp, np, np);
+            residual = relax_jacobi(u, uhelp, rows +2, np, prev_worker, next_worker );
 		    // Copy uhelp into u
-		    for (int i=0; i<np; i++)
+		    for (int i=0; i< rows +2; i++)
     		        for (int j=0; j<np; j++)
 	    		    u[ i*np+j ] = uhelp[ i*np+j ];
 		    break;
@@ -224,6 +227,7 @@ int main( int argc, char *argv[] )
 	    }
 
         iter++;
+        MPI_Allreduce(&residual, &residual, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
         // solution good enough ?
         if (residual < 0.00005) break;
@@ -231,6 +235,9 @@ int main( int argc, char *argv[] )
         // max. iteration reached ? (no limit with maxiter=0)
         if (maxiter>0 && iter>=maxiter) break;
     }
+    printf("Gathering\n");
+    MPI_Gather(u+np, rows * np, MPI_DOUBLE, NULL, (rows) * np, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    printf("gatherreerreasdf\n");
 
     if( u ) free(u); 
     if( uhelp ) free(uhelp);
