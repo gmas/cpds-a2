@@ -94,8 +94,12 @@ double relax_redblack (double *u, unsigned sizex, unsigned sizey)
 /*
  * Blocked Gauss-Seidel solver: one iteration step
  */
-double relax_gauss (double *u, unsigned sizex, unsigned sizey)
+double relax_gauss (double *u, unsigned sizex, unsigned sizey, int prev_rank, int next_rank)
 {
+    size_t last_non_halo =  (sizex -2) * sizey;
+    MPI_Status status;
+
+    MPI_Recv(u, sizey, MPI_DOUBLE, prev_rank, 0, MPI_COMM_WORLD, &status);
     double unew, diff, sum=0.0;
     int nbx, bx, nby, by;
 
@@ -116,6 +120,13 @@ double relax_gauss (double *u, unsigned sizex, unsigned sizey)
 	            u[i*sizey+j]=unew;
                 }
     
+    MPI_Send(&u[last_non_halo], sizey, MPI_DOUBLE, next_rank, 0, MPI_COMM_WORLD);
+
+    size_t first_non_halo =  sizey;
+    size_t last_halo =  (sizex -1) * sizey;
+    MPI_Send(&u[first_non_halo], sizey, MPI_DOUBLE, prev_rank, 0, MPI_COMM_WORLD);
+    MPI_Recv(&u[last_halo], sizey, MPI_DOUBLE, next_rank, 0, MPI_COMM_WORLD, &status);
+
     return sum;
 }
 

@@ -100,7 +100,6 @@ int main( int argc, char *argv[] )
     
     // starting time
     runtime = wtime();
-    MPI_Status status;
 
     int sizex = param.resolution / numprocs + 2;
 
@@ -131,7 +130,7 @@ int main( int argc, char *argv[] )
 		    residual = relax_redblack(param.u, np, np);
 		    break;
 	    case 2: // GAUSS
-		    residual = relax_gauss(param.u, np, np);
+		    residual = relax_gauss(param.u, sizex, np, prev_worker, next_worker);
 		    break;
 	    }
 
@@ -222,7 +221,7 @@ int main( int argc, char *argv[] )
 		    residual = relax_redblack(u, np, np);
 		    break;
 	    case 2: // GAUSS
-		    residual = relax_gauss(u, np, np);
+		    residual = relax_gauss(u,  rows +2, np, prev_worker, next_worker);
 		    break;
 	    }
 
