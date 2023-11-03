@@ -216,9 +216,13 @@ int main( int argc, char *argv[] ) {
 
     // TODO: Allocation on GPU for matrices u and uhelp
     //...
+    cudaMalloc((void**)dev_u, (np*np)*(sizeof(float)));
+    cudaMalloc((void**)dev_uhelp, (np*np)*(sizeof(float)));
 
     // TODO: Copy initial values in u and uhelp from host to GPU
     //...
+    cudaMemcpy(dev_u, param.u, (np*np)*(sizeof(float)), cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_uhelp, param.u_help, (np*np)*(sizeof(float)), cudaMemcpyHostToDevice);
 
     iter = 0;
     while(1) {
@@ -227,6 +231,10 @@ int main( int argc, char *argv[] ) {
 
         // TODO: residual is computed on host, we need to get from GPU values computed in u and uhelp
         //...
+    
+    cudaMemcpy(param.u_help,dev_uhelp, (np*np)*(sizeof(float)), cudaMemcpyDeviceToHost);
+    cudaMemcpy(param.u_help,dev_u, (np*np)*(sizeof(float)), cudaMemcpyDeviceToHost);
+
 	residual = cpu_residual (param.u, param.uhelp, np, np);
 
 	float * tmp = dev_u;
