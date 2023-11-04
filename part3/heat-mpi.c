@@ -135,7 +135,9 @@ int main( int argc, char *argv[] )
 	    }
 
         iter++;
-        MPI_Allreduce(&residual, &residual, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        double residual_copy;
+        MPI_Allreduce(&residual, &residual_copy, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        residual = residual_copy;
 
         // solution good enough ?
         if (residual < 0.00005) break;
@@ -226,8 +228,9 @@ int main( int argc, char *argv[] )
 	    }
 
         iter++;
-        MPI_Allreduce(&residual, &residual, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-
+        double residual_copy;
+        MPI_Allreduce(&residual, &residual_copy, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        residual = residual_copy;
         // solution good enough ?
         if (residual < 0.00005) break;
 
