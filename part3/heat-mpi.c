@@ -147,7 +147,7 @@ int main( int argc, char *argv[] )
     }
         printf("Gathering master\n");
 
-        MPI_Gather(param.u + np, (sizex-2) * np, MPI_DOUBLE, param.u + np, (sizex-2) * np, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        MPI_Gather(MPI_IN_PLACE, (sizex-2) * np, MPI_DOUBLE, param.u + np, (sizex-2) * np, MPI_DOUBLE, 0, MPI_COMM_WORLD);
         printf("gathered master\n");
 
     // Flop count after iter iterations
@@ -237,9 +237,7 @@ int main( int argc, char *argv[] )
         // max. iteration reached ? (no limit with maxiter=0)
         if (maxiter>0 && iter>=maxiter) break;
     }
-    printf("Gathering\n");
     MPI_Gather(u+np, rows * np, MPI_DOUBLE, NULL, (rows) * np, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    printf("gatherreerreasdf\n");
 
     if( u ) free(u); 
     if( uhelp ) free(uhelp);
