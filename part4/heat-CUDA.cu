@@ -131,7 +131,7 @@ int main( int argc, char *argv[] ) {
     int Grid_Dim, Block_Dim;	// Grid and Block structure values
     if (strcmp(argv[2], "-t")==0) {
             Block_Dim = atoi(argv[3]);
-            Grid_Dim = np/Block_Dim + ((np%Block_Dim)!=0);;
+            Grid_Dim = param.resolution/Block_Dim + ((param.resolution%Block_Dim)!=0);;
     	    if ((Block_Dim*Block_Dim) > 512) {
         	printf("Error -- too many threads in block, try again\n");
         	return 1;
@@ -216,13 +216,13 @@ int main( int argc, char *argv[] ) {
 
     // TODO: Allocation on GPU for matrices u and uhelp
     //...
-    cudaMalloc((void**)dev_u, (np*np)*(sizeof(float)));
-    cudaMalloc((void**)dev_uhelp, (np*np)*(sizeof(float)));
+    cudaMalloc((void**)&dev_u, (np*np)*(sizeof(float)));
+    cudaMalloc((void**)&dev_uhelp, (np*np)*(sizeof(float)));
 
     // TODO: Copy initial values in u and uhelp from host to GPU
     //...
     cudaMemcpy(dev_u, param.u, (np*np)*(sizeof(float)), cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_uhelp, param.u_help, (np*np)*(sizeof(float)), cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_uhelp, param.uhelp, (np*np)*(sizeof(float)), cudaMemcpyHostToDevice);
 
     iter = 0;
     while(1) {
@@ -232,8 +232,8 @@ int main( int argc, char *argv[] ) {
         // TODO: residual is computed on host, we need to get from GPU values computed in u and uhelp
         //...
     
-    cudaMemcpy(param.u_help,dev_uhelp, (np*np)*(sizeof(float)), cudaMemcpyDeviceToHost);
-    cudaMemcpy(param.u_help,dev_u, (np*np)*(sizeof(float)), cudaMemcpyDeviceToHost);
+    cudaMemcpy(param.uhelp,dev_uhelp, (np*np)*(sizeof(float)), cudaMemcpyDeviceToHost);
+    cudaMemcpy(param.u,dev_u, (np*np)*(sizeof(float)), cudaMemcpyDeviceToHost);
 
 	residual = cpu_residual (param.u, param.uhelp, np, np);
 
@@ -249,6 +249,8 @@ int main( int argc, char *argv[] ) {
         // max. iteration reached ? (no limit with maxiter=0)
         if (iter>=param.maxiter) break;
     }
+    cudaFree(dev_u);
+    cudaFree(dev_uhelp);
 
     // TODO: get result matrix from GPU
     //...
