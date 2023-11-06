@@ -4,6 +4,12 @@
 #include <float.h>
 #include <cuda.h>
 
+
+#ifndef NumElem
+#define NumElem 512
+#endif
+
+
 typedef struct {
     float posx;
     float posy;
@@ -36,7 +42,9 @@ int coarsen(float *uold, unsigned oldx, unsigned oldy ,
 	    float *unew, unsigned newx, unsigned newy );
 
 
-__global__ void gpu_Heat (float *h, float *g, int N);
+__global__ void gpu_Heat (float *h, float *g, float *residual, int N);
+__global__ void Kernel07(float *g_idata, float *g_odata, int N);
+__global__ void Kernel06(float *g_idata, float *g_odata);
 
 #define NB 8
 #define min(a,b) ( ((a) < (b)) ? (a) : (b) )
@@ -207,17 +215,23 @@ int main( int argc, char *argv[] ) {
 
     dim3 Grid(Grid_Dim, Grid_Dim);
     dim3 Block(Block_Dim, Block_Dim);
+
+
     
     // starting time
     cudaEventRecord( start, 0 );
     cudaEventSynchronize( start );
 
-    float *dev_u, *dev_uhelp;
+    float *dev_u, *dev_uhelp, *residual_by_cell, *residual_sum_helper, *residual_sum;
 
     // TODO: Allocation on GPU for matrices u and uhelp
     //...
     cudaMalloc((void**)&dev_u, (np*np)*(sizeof(float)));
     cudaMalloc((void**)&dev_uhelp, (np*np)*(sizeof(float)));
+    cudaMalloc((void**)&residual_by_cell, (param.resolution * param.resolution)*(sizeof(float)));
+    cudaMalloc((void**)&residual_sum_helper, (param.resolution * param.resolution)*(sizeof(float)));
+    cudaMalloc((void**)&residual_sum, (sizeof(float)));
+
 
     // TODO: Copy initial values in u and uhelp from host to GPU
     //...
@@ -226,20 +240,31 @@ int main( int argc, char *argv[] ) {
 
     iter = 0;
     while(1) {
-        gpu_Heat<<<Grid,Block>>>(dev_u, dev_uhelp, np);
+        gpu_Heat<<<Grid,Block>>>(dev_u, dev_uhelp,residual_by_cell, np);
         cudaDeviceSynchronize();  // Wait for compute device to finish.
+
+        int sum_n_blocks = NumElem * 2;
+        int sum_n_threads = NumElem;
+        // obtain the sum of residuals
+        Kernel07<<<sum_n_blocks, sum_n_threads>>>(residual_by_cell, residual_sum_helper, (param.resolution * param.resolution));
+        Kernel06<<<1, sum_n_threads>>>(residual_sum_helper, residual_sum);
+
+        // Obtener el resultado parcial desde el host
+        cudaMemcpy(&residual, residual_sum, sizeof(float), cudaMemcpyDeviceToHost);
+
+
 
         // TODO: residual is computed on host, we need to get from GPU values computed in u and uhelp
         //...
     
-    cudaMemcpy(param.uhelp,dev_uhelp, (np*np)*(sizeof(float)), cudaMemcpyDeviceToHost);
-    cudaMemcpy(param.u,dev_u, (np*np)*(sizeof(float)), cudaMemcpyDeviceToHost);
+        // cudaMemcpy(param.uhelp,dev_uhelp, (np*np)*(sizeof(float)), cudaMemcpyDeviceToHost);
+        // cudaMemcpy(param.u,dev_u, (np*np)*(sizeof(float)), cudaMemcpyDeviceToHost);
 
-	residual = cpu_residual (param.u, param.uhelp, np, np);
+        // residual = cpu_residual (param.u, param.uhelp, np, np);
 
-	float * tmp = dev_u;
-	dev_u = dev_uhelp;
-	dev_uhelp = tmp;
+        float * tmp = dev_u;
+        dev_u = dev_uhelp;
+        dev_uhelp = tmp;
 
         iter++;
 
@@ -249,14 +274,13 @@ int main( int argc, char *argv[] ) {
         // max. iteration reached ? (no limit with maxiter=0)
         if (iter>=param.maxiter) break;
     }
+
+    cudaMemcpy(param.u, dev_u, (np*np)*(sizeof(float)), cudaMemcpyDeviceToHost);
     cudaFree(dev_u);
     cudaFree(dev_uhelp);
-
-    // TODO: get result matrix from GPU
-    //...
-
-    // TODO: free memory used in GPU
-    //...
+    cudaFree(residual_by_cell);
+    cudaFree(residual_sum_helper);
+    cudaFree(residual_sum);
 
     cudaEventRecord( stop, 0 );     // instrument code to measue end time
     cudaEventSynchronize( stop );
