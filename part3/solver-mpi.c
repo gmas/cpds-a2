@@ -130,3 +130,41 @@ double relax_gauss (double *u, unsigned sizex, unsigned sizey, int prev_rank, in
     return sum;
 }
 
+/*
+ * Blocked Gauss-Seidel solver: one iteration step
+ */
+double relax_gauss_ordered_execution (double *u, unsigned sizex, unsigned sizey)
+{
+    double unew, diff, sum=0.0;
+    int nbx, bx, nby, by;
+
+    nbx = NB;
+    bx = sizex/nbx;
+    nby = NB;
+    by = sizey/nby;
+    int ii,jj;
+    #pragma omp parallel for ordered(2) collapse(2) private(unew, diff)
+    for (ii=0; ii<nbx; ii++)
+        for (jj=0; jj<nby; jj++) 
+        {
+            #pragma omp ordered depend(sink: ii-1, jj) depend(sink: ii, jj-1)
+            {
+            double partial_sum = 0;
+            for (int i=1+ii*bx; i<=min((ii+1)*bx, sizex-2); i++) 
+                for (int j=1+jj*by; j<=min((jj+1)*by, sizey-2); j++) {
+                    unew= 0.25 * (    u[ i*sizey        + (j-1) ]+  // left
+                                      u[ i*sizey        + (j+1) ]+  // right
+                                      u[ (i-1)*sizey    + j     ]+  // top
+                                      u[ (i+1)*sizey    + j     ]); // bottom
+                    diff = unew - u[i*sizey+ j];
+                    partial_sum += diff * diff; 
+                    u[i*sizey+j]=unew;
+                }
+            #pragma omp atomic
+            sum += partial_sum;
+            #pragma omp ordered depend(source)
+            }
+        }
+    printf("Current sum: %3.5f\n", sum);
+    return sum;
+}
