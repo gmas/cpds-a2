@@ -98,14 +98,13 @@ double relax_gauss (double *u, unsigned sizex, unsigned sizey)
     nby = NB;
     by = sizey/nby;
     int ii,jj;
-    #pragma omp parallel private(unew, diff, ii , jj )
-    #pragma omp single
-    {
+    #pragma omp parallel for ordered(2) collapse(2) private(unew, diff)
     for (ii=0; ii<nbx; ii++)
         for (jj=0; jj<nby; jj++) 
-            #pragma omp task depend(in: u[ii*bx + (jj+1)*by], u[(ii+1)*bx + (jj)*by])  depend(out: u[(ii + 1)*bx + (jj+1)*by])
         {
-                double partial_sum = 0;
+            #pragma omp ordered depend(sink: ii-1, jj) depend(sink: ii, jj-1)
+	    {
+            double partial_sum = 0;
             for (int i=1+ii*bx; i<=min((ii+1)*bx, sizex-2); i++) 
                 for (int j=1+jj*by; j<=min((jj+1)*by, sizey-2); j++) {
                     unew= 0.25 * (    u[ i*sizey        + (j-1) ]+  // left
@@ -116,12 +115,12 @@ double relax_gauss (double *u, unsigned sizex, unsigned sizey)
                     partial_sum += diff * diff; 
                     u[i*sizey+j]=unew;
                 }
-            #pragma omp critical
-            sum += partial_sum;
-        }
-      
-    }
-    printf("Current sum: %3.3f\n", sum);
+	    #pragma omp atomic
+	    sum += partial_sum;
+            #pragma omp ordered depend(source)
+	    }
+	}
+    printf("Current sum: %3.5f\n", sum);
     return sum;
 }
 
